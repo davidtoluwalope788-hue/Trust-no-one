@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>TRUST NO ONE — Real Game</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050912;color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;touch-action:none}
+canvas{display:block;width:100%;height:100%}.screen{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(circle at 50% 40%,#17243b,#050912 70%);z-index:10}.card{width:min(92vw,520px);padding:28px;border:1px solid #33445f;border-radius:22px;background:#0b1220f2;box-shadow:0 30px 90px #000b}.eyebrow{font-size:11px;letter-spacing:3px;color:#8ca7cc}.title{font-size:52px;font-weight:900;line-height:.86;margin:12px 0}.red{color:#ff4f62}.sub{color:#aab8cd;line-height:1.5}.input{width:100%;padding:14px;border-radius:12px;border:1px solid #35445c;background:#101a2a;color:#fff;font-size:16px;margin:10px 0}.btn{width:100%;padding:14px;border:0;border-radius:12px;background:#ff4f62;color:white;font-weight:900;font-size:14px}.small{display:block;text-align:center;color:#66768f;margin-top:14px;font-size:12px}.hidden{display:none!important}
+#hud{position:fixed;top:0;left:0;right:0;z-index:3;pointer-events:none}.bar{display:flex;justify-content:space-between;gap:7px;padding:12px}.pill{background:#09111ddd;border:1px solid #33435d;border-radius:10px;padding:8px 10px;font-size:12px;font-weight:800}.surv{color:#78d8ff}.sab{color:#ff5669}.obj{color:#7df0a5}.time{color:#ffd166}
+#toast{position:fixed;top:64px;left:50%;transform:translateX(-50%);background:#0a1220ee;border:1px solid #33435d;border-radius:18px;padding:8px 13px;font-size:12px;z-index:5;opacity:0;transition:.2s}
+#controls{position:fixed;inset:0;z-index:4;pointer-events:none}.stick{position:absolute;left:22px;bottom:22px;width:120px;height:120px;border:2px solid #71829c77;border-radius:50%;background:#0b122088;pointer-events:auto}.knob{position:absolute;left:35px;top:35px;width:46px;height:46px;border-radius:50%;background:#b4c5dcdd}.actions{position:absolute;right:16px;bottom:18px;display:flex;gap:7px;pointer-events:auto}.act{border:1px solid #40516e;background:#101b2ccc;color:#fff;border-radius:12px;padding:12px 10px;font-size:11px;font-weight:900}.danger{background:#b72e40}.disabled{opacity:.35}
+#meeting{position:fixed;inset:0;background:#000b;z-index:8;display:grid;place-items:center}.meetingcard{width:min(94vw,600px);max-height:90vh;overflow:auto;background:#0b1220;border:1px solid #3c4c68;border-radius:20px;padding:22px}.votes{display:grid;grid-template-columns:1fr 1fr;gap:8px}.vote{display:flex;justify-content:space-between;align-items:center;padding:10px;border:1px solid #2e3c55;background:#111b2b;border-radius:10px}.vote button{border:0;border-radius:8px;background:#ff4f62;color:white;padding:8px 10px;font-weight:800}.chat{height:110px;overflow:auto;background:#060b13;border-radius:10px;padding:8px;margin:12px 0;font-size:12px}.chatrow{display:flex;gap:6px}.chatrow input{flex:1;background:#101a2a;border:1px solid #33445d;color:white;border-radius:8px;padding:9px}.chatrow button{border:0;border-radius:8px;background:#33445d;color:#fff;padding:9px}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="start" class="screen">
+ <div class="card">
+  <div class="eyebrow">ONLINE SOCIAL SURVIVAL • V1</div>
+  <div class="title">TRUST<br><span class="red">NO ONE</span></div>
+  <p class="sub">You are trapped inside an abandoned research facility. Complete the objectives and escape — but one player is secretly trying to stop everyone.</p>
+  <input id="name" class="input" maxlength="16" value="PLAYER" placeholder="Your name">
+  <button id="startBtn" class="btn">ENTER FACILITY</button>
+  <span class="small">4-player local simulation • mobile ready</span>
+ </div>
+</div>
+
+<div id="hud" class="hidden">
+ <div class="bar"><div id="role" class="pill">SURVIVOR</div><div id="timer" class="pill time">10:00</div><div id="task" class="pill obj">0/3 OBJECTIVES</div></div>
+</div>
+<div id="toast"></div>
+
+<div id="controls" class="hidden">
+ <div id="stick" class="stick"><div id="knob" class="knob"></div></div>
+ <div class="actions">
+  <button id="interact" class="act">INTERACT</button>
+  <button id="ability" class="act danger">SABOTAGE</button>
+  <button id="report" class="act">REPORT</button>
+ </div>
+</div>
+
+<div id="meeting" class="hidden">
+ <div class="meetingcard">
+  <h2>🚨 EMERGENCY MEETING</h2><p id="reason" class="sub"></p>
+  <div id="votes" class="votes"></div>
+  <button id="skip" class="act" style="margin-top:10px">SKIP VOTE</button>
+  <div id="chat" class="chat"></div>
+  <div class="chatrow"><input id="chatInput" maxlength="100" placeholder="Type a message"><button id="send">SEND</button></div>
+ </div>
+</div>
+
+<div id="end" class="screen hidden">
+ <div class="card"><div id="endTitle" class="title"></div><p id="endText" class="sub"></p><button class="btn" onclick="location.reload()">PLAY AGAIN</button></div>
+</div>
+
+<script>
+const C=document.getElementById("game"),X=C.getContext("2d");
+let W,H,started=false,ended=false,role="survivor",name="PLAYER",time=600,completed=0,meeting=false;
+let me={x:330,y:260}, sabotageCooldown=0, reportCooldown=0, keys={},joy={x:0,y:0};
+const players=[
+ {id:0,name:"YOU",x:330,y:260,alive:true,role:"survivor",color:"#78d8ff"},
+ {id:1,name:"MAYA",x:780,y:260,alive:true,role:"survivor",color:"#f2b84b"},
+ {id:2,name:"KAI",x:1180,y:260,alive:true,role:"survivor",color:"#8de17b"},
+ {id:3,name:"NOAH",x:800,y:640,alive:true,role:"saboteur",color:"#ff5669"}
+];
+let objectives=[{x:300,y:255,label:"POWER",done:false},{x:780,y:255,label:"ACCESS CARD",done:false},{x:1180,y:640,label:"EXIT",done:false}];
+
+function resize(){W=C.width=innerWidth*devicePixelRatio;H=C.height=innerHeight*devicePixelRatio;C.style.width=innerWidth+"px";C.style.height=innerHeight+"px";X.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);W=innerWidth;H=innerHeight}
+addEventListener("resize",resize);resize();
+
+function toast(t){const e=document.getElementById("toast");e.textContent=t;e.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.opacity=0,2400)}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function worldToScreen(x,y){return [x/1600*W,y/900*H]}
+
+function draw(){
+ X.clearRect(0,0,W,H); X.fillStyle="#080f1a";X.fillRect(0,0,W,H);
+ const rooms=[[60,80,430,300,"LOBBY"],[585,80,430,300,"SECURITY"],[1090,80,450,300,"LAB"],[60,480,430,300,"GENERATOR"],[585,480,955,300,"EMERGENCY EXIT"]];
+ rooms.forEach(r=>{let [x,y,w,h,n]=r,sx=x/1600*W,sy=y/900*H,sw=w/1600*W,sh=h/900*H;X.fillStyle="#121e31";X.fillRect(sx,sy,sw,sh);X.strokeStyle="#354a68";X.lineWidth=2;X.strokeRect(sx,sy,sw,sh);X.fillStyle="#8398b6";X.font="bold 13px system-ui";X.fillText(n,sx+12,sy+22)});
+ X.fillStyle="#0c1524";X.fillRect(W*.315,H*.22,W*.045,H*.53);X.fillRect(W*.635,H*.22,W*.045,H*.53);X.fillRect(W*.22,H*.43,W*.56,H*.1);
+ objectives.forEach(o=>{let [sx,sy]=worldToScreen(o.x,o.y);X.beginPath();X.arc(sx,sy,19,0,7);X.fillStyle=o.done?"#245b3d":"#203d58";X.fill();X.strokeStyle=o.done?"#7df0a5":"#6f8ba8";X.stroke();X.fillStyle=o.done?"#7df0a5":"#b6c8df";X.font="bold 10px system-ui";X.textAlign="center";X.fillText(o.label,sx,sy+34);X.textAlign="left"});
+ players.forEach((p,i)=>{if(i===0){p.x=me.x;p.y=me.y}if(!p.alive)return;let [sx,sy]=worldToScreen(p.x,p.y);X.beginPath();X.arc(sx,sy,13,0,7);X.fillStyle=p.color;X.fill();X.strokeStyle="#fff";X.stroke();X.fillStyle="#fff";X.font="bold 10px system-ui";X.textAlign="center";X.fillText(p.name,sx,sy-20);X.textAlign="left"});
+ requestAnimationFrame(draw)
+}
+draw();
+
+function updateHud(){document.getElementById("timer").textContent=String(Math.floor(time/60)).padStart(2,"0")+":"+String(time%60).padStart(2,"0");document.getElementById("task").textContent=`${completed}/3 OBJECTIVES`;document.getElementById("role").textContent=role==="saboteur"?"ROLE: SABOTEUR":"ROLE: SURVIVOR";document.getElementById("role").className="pill "+(role==="saboteur"?"sab":"surv")}
+function win(t,x){if(ended)return;ended=true;document.getElementById("endTitle").textContent=t;document.getElementById("endText").textContent=x;document.getElementById("end").classList.remove("hidden");document.getElementById("controls").classList.add("hidden")}
+function doInteract(){if(ended||meeting)return;let o=objectives.find(o=>!o.done&&dist(me,o)<75);if(!o){toast("Move closer to an objective.");return}if(role==="saboteur"){toast("You can interfere, but you cannot complete survivor objectives.");return}o.done=true;completed++;toast("Objective completed.");updateHud();if(completed===3)win("SURVIVORS WIN","All three objectives are complete. The emergency exit is open.")}
+function doSab(){if(role!=="saboteur"){toast("Only the Saboteur can sabotage.");return}if(sabotageCooldown>0){toast("Ability cooling down.");return}sabotageCooldown=15;time=Math.max(0,time-20);const o=objectives.find(o=>o.done);if(o){o.done=false;completed=Math.max(0,completed-1)}toast("⚠ SABOTAGE! Systems are failing.")}
+function openMeeting(){if(reportCooldown>0||meeting||ended)return;reportCooldown=20;meeting=true;document.getElementById("meeting").classList.remove("hidden");document.getElementById("reason").textContent=name+" called an emergency meeting.";const box=document.getElementById("votes");box.innerHTML="";players.filter(p=>p.alive).forEach(p=>{let d=document.createElement("div");d.className="vote";d.innerHTML=`<span>${p.name}</span><button>VOTE</button>`;d.querySelector("button").onclick=()=>vote(p.id);box.appendChild(d)})}
+function vote(id){if(!meeting)return;const p=players[id];meeting=false;document.getElementById("meeting").classList.add("hidden");if(p.role==="saboteur"){p.alive=false;win("SURVIVORS WIN","The group found and eliminated the Saboteur.");}else{p.alive=false;toast(p.name+" was eliminated. They were NOT the Saboteur.");}}
+document.getElementById("skip").onclick=()=>{meeting=false;document.getElementById("meeting").classList.add("hidden");toast("No one was eliminated.")};
+document.getElementById("send").onclick=()=>{let i=document.getElementById("chatInput");if(i.value.trim()){let d=document.createElement("div");d.textContent=name+": "+i.value.trim();document.getElementById("chat").appendChild(d);i.value=""}};
+document.getElementById("chatInput").onkeydown=e=>{if(e.key==="Enter")document.getElementById("send").click()};
+
+document.getElementById("startBtn").onclick=()=>{name=(document.getElementById("name").value||"PLAYER").slice(0,16);players[0].name=name;role=Math.random()<.25?"saboteur":"survivor";players[0].role=role;started=true;document.getElementById("start").classList.add("hidden");document.getElementById("hud").classList.remove("hidden");document.getElementById("controls").classList.remove("hidden");updateHud();toast(role==="saboteur"?"You are the SABOTEUR. Stop them.":"You are a SURVIVOR. Trust no one.");setInterval(()=>{if(started&&!ended&&!meeting){time--;sabotageCooldown=Math.max(0,sabotageCooldown-1);reportCooldown=Math.max(0,reportCooldown-1);updateHud();if(time<=0)win(role==="saboteur"?"SABOTEUR WINS":"SURVIVORS WIN",role==="saboteur"?"The facility lockdown defeated the survivors.":"Time expired, but the survivors held on.")}},1000)};
+
+document.getElementById("interact").onclick=doInteract;document.getElementById("ability").onclick=doSab;document.getElementById("report").onclick=openMeeting;
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+setInterval(()=>{if(!started||ended||meeting)return;let x=0,y=0;if(keys.w||keys.arrowup)y--;if(keys.s||keys.arrowdown)y++;if(keys.a||keys.arrowleft)x--;if(keys.d||keys.arrowright)x++;x+=joy.x;y+=joy.y;let m=Math.hypot(x,y)||1;me.x=Math.max(80,Math.min(1520,me.x+x/m*8));me.y=Math.max(80,Math.min(820,me.y+y/m*8))},30);
+
+const stick=document.getElementById("stick"),knob=document.getElementById("knob");
+function jm(e){let r=stick.getBoundingClientRect(),p=e.touches[0],x=p.clientX-r.left-r.width/2,y=p.clientY-r.top-r.height/2,m=Math.hypot(x,y)||1,max=38;if(m>max){x=x/m*max;y=y/m*max}knob.style.transform=`translate(${x}px,${y}px)`;joy={x:x/max,y:y/max}}
+function je(){knob.style.transform="translate(0,0)";joy={x:0,y:0}}
+stick.addEventListener("touchstart",jm,{passive:true});stick.addEventListener("touchmove",jm,{passive:true});stick.addEventListener("touchend",je);
+</script>
+</body>
+</html>
